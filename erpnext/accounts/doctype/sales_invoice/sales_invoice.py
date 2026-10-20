@@ -10,10 +10,21 @@ from frappe.model.utils import get_fetch_values
 from frappe.utils import add_days, cint, cstr, flt, formatdate, get_link_to_form, getdate, nowdate
 
 import erpnext
+<<<<<<< HEAD
 from erpnext.accounts.deferred_revenue import validate_service_stop_date
 from erpnext.accounts.doctype.dunning.dunning import (
 	get_invoice_outstanding,
 	get_payment_schedule_outstanding,
+=======
+from erpnext.accounts.deferred_revenue import (
+	validate_deferred_revenue_return_cancellation,
+	validate_service_stop_date,
+)
+from erpnext.accounts.doctype.loyalty_program.loyalty_program import validate_loyalty_points
+from erpnext.accounts.doctype.pricing_rule.utils import (
+	update_coupon_code_count,
+	validate_coupon_code,
+>>>>>>> fdac4c1 (fix(accounts): reverse unrecognized deferred revenue on returns)
 )
 from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
 	get_loyalty_program_details_with_points,
@@ -629,7 +640,13 @@ class SalesInvoice(SellingController):
 		return result[0][0] if result else None
 
 	def before_cancel(self):
+<<<<<<< HEAD
 		self.check_if_consolidated_invoice()
+=======
+		validate_deferred_revenue_return_cancellation(self)
+		POSService(self).check_if_created_using_pos_and_pos_closing_entry_generated()
+		POSService(self).check_if_consolidated_invoice()
+>>>>>>> fdac4c1 (fix(accounts): reverse unrecognized deferred revenue on returns)
 
 		super().before_cancel()
 		self.update_time_sheet(self.return_against if (self.is_return and self.return_against) else None)
