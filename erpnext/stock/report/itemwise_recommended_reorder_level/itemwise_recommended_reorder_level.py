@@ -115,10 +115,14 @@ def get_consumed_items(filters):
 			(sle.actual_qty < 0)
 			& (sle.is_cancelled == 0)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 			# a Stock Reconciliation counts stock, it does not consume it: the outgoing leg a serial
 			# or batch row posts before its new balance is a recount, as is an Adjustment Entry
 >>>>>>> acf28b5 (fix(stock): do not count a stock reconciliation as consumption)
+=======
+			# a Stock Reconciliation recounts stock, it does not consume it
+>>>>>>> a57d2a7 (chore: shorten the stock reconciliation comment in the consumption reports)
 			& (
 				sle.voucher_type.notin(
 					[
