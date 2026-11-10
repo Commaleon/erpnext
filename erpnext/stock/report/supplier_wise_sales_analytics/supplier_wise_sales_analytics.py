@@ -86,6 +86,18 @@ def get_consumed_details(filters):
 			sle.stock_value_difference,
 			sle.voucher_no,
 			sle.voucher_type,
+<<<<<<< HEAD:erpnext/stock/report/supplier_wise_sales_analytics/supplier_wise_sales_analytics.py
+=======
+			sle.voucher_detail_no,
+		)
+		# a Stock Reconciliation counts stock, it does not consume it: the outgoing leg a serial
+		# or batch row posts before its new balance is a recount, as is an Adjustment Entry
+		.where(
+			(sle.is_cancelled == 0)
+			& (sle.item_code == item.name)
+			& ((sle.actual_qty < 0) | (sle.voucher_type.isin(SALES_VOUCHER_TYPES)))
+			& (sle.voucher_type != "Stock Reconciliation")
+>>>>>>> acf28b5 (fix(stock): do not count a stock reconciliation as consumption):erpnext/stock/report/item_wise_consumption/item_wise_consumption.py
 		)
 		.where((sle.is_cancelled == 0) & (sle.item_code == item.name) & (sle.actual_qty < 0))
 	)
