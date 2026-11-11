@@ -225,6 +225,9 @@ class PurchaseReceipt(BuyingController):
 		]
 
 	def update_prevdoc_status(self):
+		from erpnext.buying.purchase_demand import use_demand_quantity
+
+		use_demand_quantity(self, ("Material Request Item",))
 		if cint(self.is_return):
 			self.status_updater.extend(self.get_return_status_updaters())
 
@@ -261,7 +264,11 @@ class PurchaseReceipt(BuyingController):
 		]
 
 	def before_validate(self):
+		from erpnext.buying.purchase_demand import lock_purchase_receipt_sources
 		from erpnext.stock.doctype.putaway_rule.putaway_rule import _apply_putaway_rule
+
+		if self._action == "submit":
+			lock_purchase_receipt_sources(self)
 
 		if self.get("items") and self.apply_putaway_rule and not self.get("is_return"):
 			if items := _apply_putaway_rule(self.doctype, self.get("items"), self.company):
@@ -294,6 +301,11 @@ class PurchaseReceipt(BuyingController):
 		self.reset_default_field_value("set_warehouse", "items", "warehouse")
 		self.reset_default_field_value("rejected_warehouse", "items", "rejected_warehouse")
 		self.reset_default_field_value("set_from_warehouse", "items", "from_warehouse")
+
+	def before_submit(self):
+		from erpnext.buying.purchase_demand import bind_purchase_receipt
+
+		bind_purchase_receipt(self)
 
 	def validate_uom_is_integer(self):
 		super().validate_uom_is_integer("uom", ["qty", "received_qty"], "Purchase Receipt Item")
@@ -474,6 +486,9 @@ class PurchaseReceipt(BuyingController):
 		self.update_received_qty_if_from_pp()
 
 	def before_cancel(self):
+		from erpnext.buying.purchase_demand import lock_purchase_receipt_sources
+
+		lock_purchase_receipt_sources(self)
 		super().before_cancel()
 		self.remove_amount_difference_with_purchase_invoice()
 		self.cancel_stock_reservations_made_by_receipt()

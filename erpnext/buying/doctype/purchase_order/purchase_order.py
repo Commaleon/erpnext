@@ -431,10 +431,22 @@ class PurchaseOrder(BuyingController):
 	def is_item_closable(self, item):
 		return flt(item.received_qty) < flt(item.qty) or super().is_item_closable(item)
 
+	def before_update_after_submit(self):
+		from erpnext.buying.purchase_demand import bind_purchase_order
+
+		bind_purchase_order(self)
+
 	def update_prevdoc_status(self):
+		from erpnext.buying.purchase_demand import use_demand_quantity
+
 		if self.is_subcontracted:
 			self.status_updater[0]["source_field"] = "fg_item_qty"
 
+		if any(row.get("purchase_demand_managed") for row in self.items) and not any(
+			updater["target_dt"] == "Sales Order Item" for updater in self.status_updater
+		):
+			self.update_status_updater()
+		use_demand_quantity(self, ("Material Request Item", "Sales Order Item"))
 		super().update_prevdoc_status()
 
 		for supplier_quotation in {item.supplier_quotation for item in self.items}:
@@ -446,6 +458,11 @@ class PurchaseOrder(BuyingController):
 				frappe.throw(_("Supplier Quotation {0} is cancelled").format(supplier_quotation))
 
 			doc.set_status(update=True)
+
+	def before_submit(self):
+		from erpnext.buying.purchase_demand import bind_purchase_order
+
+		bind_purchase_order(self)
 
 	def on_submit(self):
 		super().on_submit()
@@ -598,8 +615,10 @@ class PurchaseOrder(BuyingController):
 			)
 			# `Sales Order Item.ordered_qty` is tracked in stock UOM (see status_updater);
 			# use the row's stock_qty so PO UOMs that differ from stock UOM decrement correctly.
-			qty_in_stock_uom = flt(item.get("stock_qty")) or flt(item.qty) * flt(
-				item.get("conversion_factor") or 1
+			qty_in_stock_uom = (
+				flt(item.purchase_demand_qty)
+				if item.get("purchase_demand_managed")
+				else flt(item.get("stock_qty")) or flt(item.qty) * flt(item.get("conversion_factor") or 1)
 			)
 
 			frappe.db.set_value(

@@ -115,7 +115,9 @@
   "production_plan_sub_assembly_item",
   "page_break",
   "column_break_pjyo",
-  "job_card"
+  "job_card",
+  "purchase_demand_managed",
+  "purchase_demand_qty"
  ],
  "fields": [
   {
@@ -960,6 +962,27 @@
    "non_negative": 1,
    "print_hide": 1,
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "purchase_demand_managed",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Purchase Demand Managed",
+   "no_copy": 1,
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "purchase_demand_qty",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Purchase Demand Quantity (Stock UOM)",
+   "no_copy": 1,
+   "precision": "6",
+   "read_only": 1,
+   "allow_on_submit": 1
   }
  ],
  "grid_page_length": 50,

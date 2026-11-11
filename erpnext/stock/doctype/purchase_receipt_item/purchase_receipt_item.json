@@ -137,7 +137,9 @@
   "page_break",
   "sales_order",
   "sales_order_item",
-  "subcontracting_receipt_item"
+  "subcontracting_receipt_item",
+  "purchase_demand_managed",
+  "purchase_demand_qty"
  ],
  "fields": [
   {
@@ -1173,6 +1175,27 @@
   {
    "fieldname": "rejected_serial_batch_entries_html",
    "fieldtype": "HTML"
+  },
+  {
+   "default": "0",
+   "fieldname": "purchase_demand_managed",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Purchase Demand Managed",
+   "no_copy": 1,
+   "read_only": 1,
+   "allow_on_submit": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "purchase_demand_qty",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Purchase Demand Quantity (Stock UOM)",
+   "no_copy": 1,
+   "precision": "6",
+   "read_only": 1,
+   "allow_on_submit": 1
   }
  ],
  "idx": 1,

@@ -677,6 +677,8 @@ class PurchaseInvoice(BuyingController):
 					frappe.throw(_("Purchase Receipt {0} is not submitted").format(d.purchase_receipt))
 
 	def update_status_updater_args(self):
+		from erpnext.buying.purchase_demand import configured_warehouses, source_expression
+
 		if is_billed_by_qty():
 			self.set_purchase_order_billing_by_qty()
 
@@ -712,7 +714,9 @@ class PurchaseInvoice(BuyingController):
 					"target_ref_field": "stock_qty",
 					"source_field": "stock_qty",
 					"second_source_dt": "Purchase Receipt Item",
-					"second_source_field": "stock_qty",
+					"second_source_field": (
+						source_expression() if configured_warehouses(self.company) else "stock_qty"
+					),
 					"second_join_field": "material_request_item",
 					"extra_cond": """ and exists(select name from `tabPurchase Invoice`
 					where name=`tabPurchase Invoice Item`.parent and update_stock = 1)""",

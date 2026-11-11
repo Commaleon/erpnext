@@ -460,6 +460,7 @@ doc_events = {
 		"on_trash": "erpnext.regional.check_deletion_permission",
 	},
 	"Purchase Invoice": {
+		"before_validate": "erpnext.buying.purchase_demand.guard_stock_invoice",
 		"validate": [
 			"erpnext.regional.united_arab_emirates.utils.update_grand_total_for_rcm",
 			"erpnext.regional.united_arab_emirates.utils.validate_returns",
@@ -467,6 +468,9 @@ doc_events = {
 	},
 	"Payment Entry": {
 		"on_trash": "erpnext.regional.check_deletion_permission",
+	},
+	("Purchase Order", "Purchase Receipt"): {
+		"validate": "erpnext.buying.purchase_demand.clear_demand_fields",
 	},
 	"Company": {
 		"after_rename": "erpnext.regional.rename_vat_settings",
