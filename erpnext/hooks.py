@@ -450,6 +450,10 @@ doc_events = {
 	"Contact Us Settings": {
 		"on_update": "erpnext.crm.utils.disable_opportunity_creation_on_contact_us_disabled",
 	},
+	"Sales Order": {
+		"on_submit": "erpnext.buying.procurement.enqueue_shortage_request",
+		"on_update_after_submit": "erpnext.buying.procurement.enqueue_shortage_request",
+	},
 	"Sales Invoice": {
 		"on_submit": [
 			"erpnext.regional.italy.utils.sales_invoice_on_submit",
