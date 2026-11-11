@@ -316,10 +316,10 @@ class TestSupplier(FrappeTestCase):
 	def test_dashboard_hidden_from_user_with_only_a_shared_invoice(self):
 		from erpnext.accounts.doctype.purchase_invoice.test_purchase_invoice import make_purchase_invoice
 		from erpnext.accounts.party import get_dashboard_info
-		from erpnext.buying.test_utils import create_user_with_roles
+		from erpnext.tests.permission_test_utils import make_fenced_user
 
 		pi = make_purchase_invoice(supplier="_Test Supplier")
-		user = create_user_with_roles("supplier-dashboard-user@example.com", "Stock User").name
+		user = make_fenced_user("supplier-dashboard-user@example.com", ["Stock User"])
 		frappe.share.add_docshare(pi.doctype, pi.name, user, read=1, flags={"ignore_share_permission": True})
 
 		with self.set_user(user):
