@@ -61,6 +61,15 @@ def get_requested_item_qty(sales_order: str) -> dict:
 @frappe.whitelist()
 def make_material_request(source_name: str, target_doc: str | dict | Document | None = None):
 	requested_item_qty = get_requested_item_qty(source_name)
+	target = frappe.parse_json(target_doc) if isinstance(target_doc, str) and target_doc else target_doc
+	reserved_stock = (
+		get_unrequested_reserved_stock(source_name)
+		if not target or target.get("material_request_type") in (None, "Purchase")
+		else {}
+	)
+
+	def reserved_qty(row):
+		return flt(reserved_stock.get((row.name, row.warehouse)))
 
 	def postprocess(source, target):
 		if source.tc_name and frappe.db.get_value("Terms and Conditions", source.tc_name, "buying") != 1:
@@ -68,9 +77,10 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 			target.terms = None
 
 	def get_remaining_qty(so_item):
+		covered_stock = flt(requested_item_qty.get(so_item.name, {}).get("qty")) + reserved_qty(so_item)
 		return flt(
 			flt(so_item.qty)
-			- flt(requested_item_qty.get(so_item.name, {}).get("qty")) / (flt(so_item.conversion_factor) or 1)
+			- covered_stock / (flt(so_item.conversion_factor) or 1)
 			- max(
 				flt(so_item.get("delivered_qty")),
 				0,
@@ -91,6 +101,7 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 		return flt(
 			flt(so_item.qty)
 			- flt(requested_item_qty.get(so_item.name, {}).get("qty"))
+			- reserved_qty(so_item)
 			- max(flt(parent.delivered_qty) * components_per_unit, 0)
 		)
 
@@ -132,8 +143,9 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 			"Packed Item": {
 				"doctype": "Material Request Item",
 				"field_map": {"parent": "sales_order", "uom": "stock_uom", "name": "packed_item"},
-				"condition": lambda item: get_remaining_packed_item_qty(item) > 0
-				and not is_bundle_of_closed_row(item),
+				"condition": lambda item: (
+					get_remaining_packed_item_qty(item) > 0 and not is_bundle_of_closed_row(item)
+				),
 				"postprocess": update_item,
 			},
 			"Sales Order Item": {
@@ -144,9 +156,9 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 					"delivery_date": "schedule_date",
 					"bom_no": "bom_no",
 				},
-				"condition": lambda item: not is_product_bundle(item.item_code)
-				and not item.closed
-				and get_remaining_qty(item) > 0,
+				"condition": lambda item: (
+					not is_product_bundle(item.item_code) and not item.closed and get_remaining_qty(item) > 0
+				),
 				"postprocess": update_item,
 			},
 		},
@@ -155,8 +167,52 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 	)
 	if doc and doc.items:
 		return doc
+	elif reserved_stock:
+		frappe.throw(_("No outstanding quantity to request for this Sales Order"))
 	else:
 		frappe.throw(_("Material Request already created for the ordered quantity"))
+
+
+def get_unrequested_reserved_stock(sales_order: str) -> dict:
+	reservation = frappe.qb.DocType("Stock Reservation Entry")
+	receipt_item = frappe.qb.DocType("Purchase Receipt Item")
+	request_item = frappe.qb.DocType("Material Request Item")
+	remaining = (
+		reservation.reserved_qty
+		- reservation.delivered_qty
+		- reservation.transferred_qty
+		- reservation.consumed_qty
+	)
+	# A reservation from a receipt against an existing request is already included in requested_qty.
+	rows = (
+		frappe.qb.from_(reservation)
+		.left_join(receipt_item)
+		.on(
+			(reservation.from_voucher_type == "Purchase Receipt")
+			& (reservation.from_voucher_detail_no == receipt_item.name)
+		)
+		.left_join(request_item)
+		.on(
+			(receipt_item.material_request_item == request_item.name)
+			& (request_item.docstatus == 1)
+			& (request_item.sales_order == sales_order)
+			& (
+				(request_item.sales_order_item == reservation.voucher_detail_no)
+				| (request_item.packed_item == reservation.voucher_detail_no)
+			)
+		)
+		.select(reservation.voucher_detail_no, reservation.warehouse, Sum(remaining))
+		.where(
+			(reservation.voucher_type == "Sales Order")
+			& (reservation.voucher_no == sales_order)
+			& (reservation.docstatus == 1)
+			& (remaining > 0)
+			& request_item.name.isnull()
+		)
+		.groupby(reservation.voucher_detail_no, reservation.warehouse)
+		.run()
+	)
+	return {(row, warehouse): quantity for row, warehouse, quantity in rows}
 
 
 @frappe.whitelist()
