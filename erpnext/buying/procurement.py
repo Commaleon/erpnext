@@ -1,4 +1,3 @@
-# Copyright (c) 2026, Commaleon and Contributors
 # License: GNU General Public License v3. See license.txt
 
 """Create linked Purchase Material Requests for uncovered Sales Order quantities."""
