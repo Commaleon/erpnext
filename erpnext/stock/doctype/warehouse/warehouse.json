@@ -38,6 +38,7 @@
   "pin",
   "transit_section",
   "warehouse_type",
+  "auto_create_purchase_material_requests",
   "column_break_qajx",
   "default_in_transit_warehouse",
   "tree_details",
@@ -46,6 +47,14 @@
   "old_parent"
  ],
  "fields": [
+  {
+   "default": "0",
+   "depends_on": "eval:!doc.is_group && !doc.disabled && doc.warehouse_type !== \"Transit\"",
+   "description": "Create Purchase Material Requests for Sales Order shortages according to the order’s payment terms.",
+   "fieldname": "auto_create_purchase_material_requests",
+   "fieldtype": "Check",
+   "label": "Create Purchase Material Requests for Sales Orders"
+  },
   {
    "fieldname": "warehouse_detail",
    "fieldtype": "Section Break",
@@ -291,7 +300,7 @@
  "idx": 1,
  "is_tree": 1,
  "links": [],
- "modified": "2026-10-12 18:30:00.000000",
+ "modified": "2026-11-12 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Warehouse",

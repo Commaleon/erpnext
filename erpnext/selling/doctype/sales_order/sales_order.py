@@ -30,6 +30,7 @@ from erpnext.selling.doctype.customer.customer import (
 	is_sales_order_credit_check_bypassed,
 )
 from erpnext.selling.doctype.sales_order.services.delivery_schedule import DeliveryScheduleService
+from erpnext.selling.doctype.sales_order.services.procurement import SalesOrderProcurement
 from erpnext.selling.doctype.sales_order.services.reservation import SalesOrderStockReservation
 from erpnext.selling.doctype.sales_order.services.status import StatusService
 from erpnext.selling.doctype.sales_order.services.subcontracting import SubcontractingService
@@ -577,6 +578,9 @@ class SalesOrder(SellingController):
 			if d.delivered_by_supplier and not d.supplier:
 				frappe.throw(_("Row #{0}: Set Supplier for item {1}").format(d.idx, d.item_code))
 
+	def before_submit(self):
+		SalesOrderProcurement(self).capture_payment_policy()
+
 	def on_submit(self):
 		super().update_prevdoc_status()
 		self.check_credit_limit()
@@ -599,6 +603,8 @@ class SalesOrder(SellingController):
 
 		if self.get("reserve_stock") and not self.get("is_subcontracted"):
 			SalesOrderStockReservation(self).create_stock_reservation_entries()
+
+		SalesOrderProcurement(self).enqueue()
 
 	def on_cancel(self):
 		self.ignore_linked_doctypes = (
@@ -665,6 +671,7 @@ class SalesOrder(SellingController):
 
 	def update_status(self, status):
 		StatusService(self).update_status(status)
+		SalesOrderProcurement(self).enqueue()
 
 	def on_item_close_status_change(self):
 		StatusService(self).recalculate_after_item_close()
@@ -687,9 +694,11 @@ class SalesOrder(SellingController):
 
 	def on_update_after_submit(self):
 		self.check_credit_limit()
+		SalesOrderProcurement(self).enqueue()
 
 	def before_update_after_submit(self):
 		super().before_update_after_submit()
+		SalesOrderProcurement(self).validate_payment_policy()
 		self.validate_po()
 		self.validate_drop_ship()
 		self.validate_supplier_after_submit()
