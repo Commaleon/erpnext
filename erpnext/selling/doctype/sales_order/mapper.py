@@ -143,9 +143,8 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 			"Packed Item": {
 				"doctype": "Material Request Item",
 				"field_map": {"parent": "sales_order", "uom": "stock_uom", "name": "packed_item"},
-				"condition": lambda item: (
-					get_remaining_packed_item_qty(item) > 0 and not is_bundle_of_closed_row(item)
-				),
+				"condition": lambda item: get_remaining_packed_item_qty(item) > 0
+				and not is_bundle_of_closed_row(item),
 				"postprocess": update_item,
 			},
 			"Sales Order Item": {
@@ -156,9 +155,9 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 					"delivery_date": "schedule_date",
 					"bom_no": "bom_no",
 				},
-				"condition": lambda item: (
-					not is_product_bundle(item.item_code) and not item.closed and get_remaining_qty(item) > 0
-				),
+				"condition": lambda item: not is_product_bundle(item.item_code)
+				and not item.closed
+				and get_remaining_qty(item) > 0,
 				"postprocess": update_item,
 			},
 		},
