@@ -36,6 +36,12 @@ from erpnext.selling.doctype.sales_order.sales_order import (
 	get_potentially_billable_sales_orders,
 	has_potentially_billable_items,
 )
+from erpnext.selling.doctype.sales_order.services.procurement import (
+	AFTER_PAYMENTS,
+	MANUAL_REVIEW,
+	WITHOUT_ADVANCE,
+	create_purchase_material_request,
+)
 from erpnext.stock.doctype.item.test_item import make_item
 from erpnext.stock.doctype.stock_entry.stock_entry_utils import make_stock_entry
 from erpnext.stock.get_item_details import get_bin_details
@@ -352,6 +358,129 @@ class TestSalesOrder(ERPNextTestSuite):
 				"actual_qty", 0
 			)
 			self.assertEqual(flt(item.actual_qty), actual_qty)
+
+	def make_procurement_order(self, mode):
+		from erpnext.accounts.doctype.payment_entry.test_payment_entry import create_payment_term
+		from erpnext.stock.doctype.item.test_item import create_item
+		from erpnext.stock.doctype.warehouse.test_warehouse import create_warehouse
+
+		self.procurement_warehouse = create_warehouse("Sales Procurement Test")
+		frappe.db.set_value("Warehouse", self.procurement_warehouse, "auto_create_purchase_material_requests", 1)
+
+		item = create_item(f"Procurement Test {frappe.generate_hash(length=10)}", warehouse=self.procurement_warehouse)
+		so = make_sales_order(qty=10, item=item.name, warehouse=self.procurement_warehouse, do_not_save=True)
+		terms = []
+		for name, portion, required in (
+			("Procurement Deposit", 30, 1),
+			("Procurement Balance", 70, 0),
+		):
+			create_payment_term(name)
+			terms.append(
+				{
+					"payment_term": name,
+					"invoice_portion": portion,
+					"credit_days": 1 if required else 2,
+					"required_before_procurement": required,
+				}
+			)
+
+		template = frappe.get_doc(
+			{
+				"doctype": "Payment Terms Template",
+				"template_name": f"Procurement Test {frappe.generate_hash(length=10)}",
+				"allocate_payment_based_on_payment_terms": 1,
+				"procurement_release": mode,
+				"terms": terms,
+			}
+		).insert()
+		so.payment_terms_template = template.name
+		return so
+
+	def process_procurement(self, so):
+		return create_purchase_material_request(so.company, so.name)
+
+	def test_request_contains_only_shortage_and_can_be_retried(self):
+		for stock, shortage in ((0, 10), (4, 6), (10, 0)):
+			with self.subTest(stock=stock):
+				so = self.make_procurement_order(WITHOUT_ADVANCE)
+				if stock:
+					make_stock_entry(
+						item_code=so.items[0].item_code, to_warehouse=self.procurement_warehouse, qty=stock, rate=50
+					)
+				so.insert()
+				with patch("frappe.enqueue") as enqueue:
+					so.submit()
+				enqueue.assert_any_call(
+					create_purchase_material_request,
+					enqueue_after_commit=True,
+					company=so.company,
+					sales_order=so.name,
+				)
+				name = self.process_procurement(so)
+				if shortage:
+					request = frappe.get_doc("Material Request", name)
+					self.assertEqual(request.docstatus, 1)
+					self.assertEqual(request.material_request_type, "Purchase")
+					self.assertEqual(len(request.items), 1)
+					self.assertEqual(request.items[0].sales_order, so.name)
+					self.assertEqual(request.items[0].sales_order_item, so.items[0].name)
+					self.assertEqual(request.items[0].stock_qty, shortage)
+				else:
+					self.assertIsNone(name)
+				self.assertIsNone(self.process_procurement(so))
+
+	def test_required_installment_releases_order_under_saved_policy(self):
+		from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+		so = self.make_procurement_order(AFTER_PAYMENTS)
+		so.insert()
+		with patch("frappe.enqueue"):
+			so.submit()
+		self.assertIsNone(self.process_procurement(so))
+
+		template = frappe.get_doc("Payment Terms Template", so.payment_terms_template)
+		template.procurement_release = MANUAL_REVIEW
+		template.save()
+
+		for term_name, released in (("Procurement Balance", False), ("Procurement Deposit", True)):
+			term = next(row for row in so.payment_schedule if row.payment_term == term_name)
+			payment = get_payment_entry("Sales Order", so.name, party_amount=term.payment_amount)
+			payment.reference_no = term_name
+			payment.reference_date = nowdate()
+			reference = next(row for row in payment.references if row.payment_term == term_name)
+			reference.allocated_amount = term.payment_amount
+			payment.set("references", [reference])
+			payment.insert()
+			with patch("frappe.enqueue") as enqueue:
+				payment.submit()
+			enqueue.assert_any_call(
+				create_purchase_material_request,
+				enqueue_after_commit=True,
+				company=so.company,
+				sales_order=so.name,
+			)
+			self.assertEqual(bool(self.process_procurement(so)), released)
+
+	def test_disabled_warehouse_and_manual_payment_policy(self):
+		so = self.make_procurement_order(MANUAL_REVIEW)
+		so.insert()
+		with patch("frappe.enqueue") as enqueue:
+			so.submit()
+		self.assertNotIn(
+			create_purchase_material_request, [call.args[0] for call in enqueue.call_args_list if call.args]
+		)
+		self.assertIsNone(self.process_procurement(so))
+
+		so = self.make_procurement_order(WITHOUT_ADVANCE)
+		frappe.db.set_value("Warehouse", self.procurement_warehouse, "auto_create_purchase_material_requests", 0)
+		so.insert()
+		with patch("frappe.enqueue") as enqueue:
+			so.submit()
+		self.assertFalse(so.procurement_payment_policy)
+		self.assertNotIn(
+			create_purchase_material_request, [call.args[0] for call in enqueue.call_args_list if call.args]
+		)
+		self.assertIsNone(self.process_procurement(so))
 
 	def test_make_delivery_note(self):
 		so = make_sales_order(do_not_submit=True)

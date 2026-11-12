@@ -275,6 +275,7 @@ class PaymentEntry(AccountsController):
 		self.update_linked_dunnings()
 		self.set_status()
 		self.trigger_invoice_update_for_subscriptions()
+		self.enqueue_sales_order_procurement()
 
 	def update_linked_dunnings(self):
 		from erpnext.accounts.doctype.dunning.dunning import update_dunnings_linked_to_payment
@@ -297,6 +298,7 @@ class PaymentEntry(AccountsController):
 		if needs_repost:
 			self.validate_for_repost()
 			self.repost_accounting_entries()
+			self.enqueue_sales_order_procurement()
 
 	def set_liability_account(self):
 		# Auto setting liability account should only be done during 'draft' status
@@ -390,6 +392,12 @@ class PaymentEntry(AccountsController):
 		self.sync_payment_schedules()
 		self.set_status()
 		self.trigger_invoice_update_for_subscriptions()
+		self.enqueue_sales_order_procurement()
+
+	def enqueue_sales_order_procurement(self):
+		from erpnext.selling.doctype.sales_order.services.procurement import enqueue_payment_orders
+
+		enqueue_payment_orders(self)
 
 	def update_payment_requests(self, cancel=False):
 		from erpnext.accounts.doctype.payment_request.payment_request import (

@@ -29,6 +29,29 @@ class PaymentTermsTemplate(Document):
 	def validate(self):
 		self.validate_invoice_portion()
 		self.validate_terms()
+		self.validate_procurement_release()
+
+	def validate_procurement_release(self):
+		if self.procurement_release != "After required payments":
+			return
+
+		if not self.allocate_payment_based_on_payment_terms:
+			frappe.throw(
+				_("Enable Allocate Payment Based On Payment Terms for automatic procurement after payment.")
+			)
+
+		terms = [row.payment_term for row in self.terms]
+		required = [row for row in self.terms if row.required_before_procurement]
+		if (
+			len(terms) != len(set(terms))
+			or not required
+			or any(flt(row.invoice_portion) <= 0 for row in required)
+		):
+			frappe.throw(
+				_(
+					"Use unique payment terms and mark at least one positive installment as required before procurement."
+				)
+			)
 
 	def validate_invoice_portion(self):
 		total_portion = 0

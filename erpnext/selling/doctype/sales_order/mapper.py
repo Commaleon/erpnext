@@ -11,7 +11,7 @@ from frappe.model.mapper import get_mapped_doc
 from frappe.model.utils import get_fetch_values
 from frappe.query_builder import Case
 from frappe.query_builder.functions import Sum
-from frappe.utils import add_days, cint, flt, nowdate, strip_html
+from frappe.utils import add_days, cint, flt, getdate, nowdate, strip_html
 
 from erpnext.accounts.party import CROSS_PARTY_FIELD_NO_MAP, get_party_account
 from erpnext.buying.utils import check_on_hold_or_closed_status
@@ -60,7 +60,16 @@ def get_requested_item_qty(sales_order: str) -> dict:
 
 @frappe.whitelist()
 def make_material_request(source_name: str, target_doc: str | dict | Document | None = None):
-	requested_item_qty = get_requested_item_qty(source_name)
+	return _map_material_request(source_name, target_doc)
+
+
+def _map_material_request(
+	source_name: str,
+	target_doc: str | dict | Document | None = None,
+	*,
+	shortages: dict[str, float] | None = None,
+):
+	requested_item_qty = get_requested_item_qty(source_name) if shortages is None else {}
 
 	def postprocess(source, target):
 		if source.tc_name and frappe.db.get_value("Terms and Conditions", source.tc_name, "buying") != 1:
@@ -68,6 +77,9 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 			target.terms = None
 
 	def get_remaining_qty(so_item):
+		if shortages is not None:
+			return shortages.get(so_item.name, 0)
+
 		return flt(
 			flt(so_item.qty)
 			- flt(requested_item_qty.get(so_item.name, {}).get("qty")) / (flt(so_item.conversion_factor) or 1)
@@ -97,6 +109,10 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 	def update_item(source, target, source_parent):
 		# qty is for packed items, because packed items don't have stock_qty field
 		target.project = source_parent.project
+		if shortages is not None:
+			target.uom = target.stock_uom
+			target.conversion_factor = 1
+			target.schedule_date = max(getdate(target.schedule_date), getdate())
 		target.qty = (
 			get_remaining_packed_item_qty(source)
 			if source.parentfield == "packed_items"
@@ -132,8 +148,11 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 			"Packed Item": {
 				"doctype": "Material Request Item",
 				"field_map": {"parent": "sales_order", "uom": "stock_uom", "name": "packed_item"},
-				"condition": lambda item: get_remaining_packed_item_qty(item) > 0
-				and not is_bundle_of_closed_row(item),
+				"condition": lambda item: (
+					shortages is None
+					and get_remaining_packed_item_qty(item) > 0
+					and not is_bundle_of_closed_row(item)
+				),
 				"postprocess": update_item,
 			},
 			"Sales Order Item": {
@@ -144,14 +163,15 @@ def make_material_request(source_name: str, target_doc: str | dict | Document | 
 					"delivery_date": "schedule_date",
 					"bom_no": "bom_no",
 				},
-				"condition": lambda item: not is_product_bundle(item.item_code)
-				and not item.closed
-				and get_remaining_qty(item) > 0,
+				"condition": lambda item: (
+					not is_product_bundle(item.item_code) and not item.closed and get_remaining_qty(item) > 0
+				),
 				"postprocess": update_item,
 			},
 		},
 		target_doc,
 		postprocess,
+		ignore_permissions=shortages is not None,
 	)
 	if doc and doc.items:
 		return doc

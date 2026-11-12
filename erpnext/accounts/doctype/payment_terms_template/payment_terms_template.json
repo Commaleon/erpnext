@@ -12,9 +12,18 @@
  "field_order": [
   "template_name",
   "allocate_payment_based_on_payment_terms",
+  "procurement_release",
   "terms"
  ],
  "fields": [
+  {
+   "default": "Manual review",
+   "description": "Controls automatic Purchase Material Requests for orders in enabled warehouses. The policy is saved when an order is submitted.",
+   "fieldname": "procurement_release",
+   "fieldtype": "Select",
+   "label": "Procurement Release",
+   "options": "Manual review\nAfter required payments\nWithout advance"
+  },
   {
    "fieldname": "template_name",
    "fieldtype": "Data",
@@ -38,7 +47,7 @@
  ],
  "icon": "calendar-clock",
  "links": [],
- "modified": "2026-09-29 12:00:00.000000",
+ "modified": "2026-11-12 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Payment Terms Template",
