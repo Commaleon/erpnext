@@ -14,8 +14,6 @@ def configured_warehouses(company):
 	config = frappe.conf.get("erpnext_auto_procurement") or {}
 	if not config.get("enabled") or config.get("company") != company:
 		return ()
-	if (frappe.conf.get("commaleon_procurement") or {}).get("enabled"):
-		frappe.throw(_("Disable Commaleon Ops procurement before enabling ERPNext automatic procurement."))
 	return tuple(config.get("warehouses") or ())
 
 
